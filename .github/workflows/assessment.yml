@@ -1,0 +1,105 @@
+name: Signal Decoder Assessment
+
+on: [push, pull_request]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout candidate solution
+        uses: actions/checkout@v4
+        with:
+          path: solution
+
+      - name: Checkout assessment tests
+        uses: actions/checkout@v4
+        with:
+          repository: TlotloSeb/b1sa-signal-decoder-assessment-tests
+          token: ${{ secrets.ASSESSMENT_PAT }}
+          path: tests
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Copy tests into solution
+        run: |
+          mkdir -p solution/tests
+          cp -r tests/AssessmentTests solution/tests/SignalDecoder.AssessmentTests
+
+      - name: Restore dependencies
+        working-directory: solution
+        run: dotnet restore
+
+      - name: Build
+        working-directory: solution
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run assessment tests
+        working-directory: solution
+        run: |
+          dotnet test tests/SignalDecoder.AssessmentTests \
+            --no-build \
+            --configuration Release \
+            --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=results.trx" \
+            --results-directory TestResults
+
+      - name: Generate results summary
+        if: always()
+        working-directory: solution
+        run: |
+          echo "## 📊 Assessment Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f TestResults/results.trx ]; then
+            python3 << 'EOF'
+          import xml.etree.ElementTree as ET
+          import os
+
+          tree = ET.parse('TestResults/results.trx')
+          root = tree.getroot()
+
+          ns = {'': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+
+          summary = root.find('.//UnitTestResult', ns)
+          if summary:
+              results = root.findall('.//UnitTestResult', ns)
+
+              total = len(results)
+              passed = sum(1 for r in results if r.get('outcome') == 'Passed')
+              failed = sum(1 for r in results if r.get('outcome') == 'Failed')
+
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write(f"**Total Tests:** {total}\n")
+                  f.write(f"**Passed:** ✅ {passed}\n")
+                  f.write(f"**Failed:** ❌ {failed}\n")
+                  f.write(f"**Score:** {passed}/{total}\n\n")
+
+                  if failed > 0:
+                      f.write("### Failed Tests\n\n")
+                      for r in results:
+                          if r.get('outcome') == 'Failed':
+                              test_name = r.get('testName')
+                              f.write(f"- ❌ {test_name}\n")
+
+                  f.write("\n### All Tests\n\n")
+                  for r in results:
+                      outcome = r.get('outcome')
+                      test_name = r.get('testName')
+                      icon = '✅' if outcome == 'Passed' else '❌'
+                      f.write(f"- {icon} {test_name}\n")
+          EOF
+          else
+            echo "❌ No test results found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: solution/TestResults/
