@@ -16,6 +16,11 @@ namespace SignalDecoder.Api.Controllers
         [Route("simulate")]
         public IActionResult SimulateDevices([FromBody]SimulateRequest _Request)
         {
+            if (0 == _Request.Devices.Count)
+            {
+                return BadRequest("Empty device object, please populate.");
+            }
+
             int SignalLength = _Request.Devices.First().Value.Length;
 
             foreach (KeyValuePair<string, int[]> Device in _Request.Devices)
@@ -38,6 +43,16 @@ namespace SignalDecoder.Api.Controllers
         [Route("decode")]
         public IActionResult Decodedevices([FromBody]DecodeRequest _Request)
         {
+            if (0 == _Request.Devices.Count)
+            {
+                return BadRequest("Empty device object, please populate.");
+            }
+
+            if (0 == _Request.ReceivedSignal.Length)
+            {
+                return BadRequest("Empty int[] object, please populate.");
+            }
+
             int SignalLength = _Request.Devices.First().Value.Length;
 
             foreach (KeyValuePair<string, int[]> Device in _Request.Devices)
@@ -51,6 +66,11 @@ namespace SignalDecoder.Api.Controllers
                 {
                     return BadRequest("All signal patterns must contain non negative numbers.");
                 }
+            }
+
+            if (_Request.ReceivedSignal.Length != SignalLength )
+            {
+                return BadRequest("All signal patterns must have the same length.");
             }
             
             return Ok(_SignalDecoderService.Decode(_Request));
