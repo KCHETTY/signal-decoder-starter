@@ -7,9 +7,10 @@ namespace SignalDecoder.Api.Controllers
 {
     [Route("api/signal")]
     [ApiController]
-    public class SignalController(ISignalSimulatorService SignalSimulatorService) : ControllerBase
+    public class SignalController(ISignalSimulatorService SignalSimulatorService, ISignalDecoderService SignalDecoderService) : ControllerBase
     {
         private readonly ISignalSimulatorService _SignalSimulatorService = SignalSimulatorService;
+        private readonly ISignalDecoderService _SignalDecoderService = SignalDecoderService;
 
         [HttpPost]
         [Route("simulate")]
@@ -31,6 +32,13 @@ namespace SignalDecoder.Api.Controllers
             }
 
             return Ok(_SignalSimulatorService.Simulate(_Request.Devices));
+        }
+
+        [HttpPost]
+        [Route("decode")]
+        public IActionResult Decodedevices([FromBody]DecodeRequest _Request)
+        {
+            return Ok(_SignalDecoderService.Decode(_Request));
         }
     }
 }
