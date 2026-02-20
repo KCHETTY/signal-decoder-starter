@@ -10,6 +10,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<IDeviceGeneratorService, DeviceGeneratorService>();
+builder.Services.AddScoped<ISignalSimulatorService, SignalSimulatorService>();
 
 var app = builder.Build();
 
