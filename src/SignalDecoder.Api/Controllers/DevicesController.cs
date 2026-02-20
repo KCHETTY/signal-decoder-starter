@@ -10,6 +10,9 @@ namespace SignalDecoder.Api.Controllers
     {
         private readonly IDeviceGeneratorService _DeviceGeneratorService = DeviceGeneratorService;
 
+        /// <summary>
+        /// Generates a random set of devices with signal patterns
+        /// </summary>
         [HttpGet]
         [Route("generate")]
         public IActionResult DevicesGenerator([FromQuery]int count = 5, [FromQuery]int signalLength = 4, [FromQuery]int maxStrength = 9)

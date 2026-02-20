@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using  SignalDecoder.Domain.Interfaces;
 using  SignalDecoder.Domain.Models;
 
@@ -7,19 +8,35 @@ namespace SignalDecoder.Application.Service
     public class SignalDecoderService : ISignalDecoderService
     {
         private const int INDEX_DEFAULT = 0;
-        private void RunDecode(int startindex, int target, int Tolerance, List<(string, int)> pairs, IList<(string, int)> Combo, IList<IList<(string, int)>> records)
+        private struct DeviceStruct
         {
-            if (0 == target)
+            public DeviceStruct(List<(string, int)> _DeviceList, Boolean _IsMatch)
             {
-                records.Add(Combo);
+                DeviceList = _DeviceList;
+                IsMatch = _IsMatch;
+            }
+
+            public List<(string, int)> DeviceList { get; }
+            public Boolean IsMatch { get; }
+        }
+
+        private void RecursiveDecode(int startindex, int target, int Tolerance, List<(string, int)> Device, IList<(string, int)> ListTree, IList<DeviceStruct> DeviceList)
+        {
+            if (0 == (target - Tolerance))
+            {
+                DeviceList.Add(new DeviceStruct(ListTree.ToList(), true));
+            }
+            else if (target <= Tolerance)
+            {
+                DeviceList.Add(new DeviceStruct(ListTree.ToList(), false));
             }
             else
             {
                 int lastvalue = 0;
-                for (int itr = startindex; itr < pairs.Count; itr++)
+                for (int itr = startindex; itr < Device.Count; itr++)
                 {
-                    int Value = pairs[itr].Item2;
-                    if (pairs[itr].Item2 > target)
+                    int Value = Device[itr].Item2;
+                    if (Device[itr].Item2 > target)
                     {
                         break ;
                     }
@@ -27,9 +44,9 @@ namespace SignalDecoder.Application.Service
                     if (Value != lastvalue)
                     {
                         lastvalue = Value;
-                        Combo.Add((pairs[itr].Item1, lastvalue));
-                        RunDecode(itr + 1, target - lastvalue, Tolerance, pairs, Combo.ToList(), records);
-                        Combo.RemoveAt(Combo.Count - 1);
+                        ListTree.Add((Device[itr].Item1, lastvalue));
+                        RecursiveDecode(itr + 1, target - lastvalue, Tolerance, Device, ListTree.ToList(), DeviceList);
+                        ListTree.RemoveAt(ListTree.Count - 1);
                     }
                 }
             }
@@ -37,8 +54,7 @@ namespace SignalDecoder.Application.Service
 
         public DecodeResponse Decode(DecodeRequest request)
         {
-
-            IList<IList<(string, int)>> ValidMatches = new List<IList<(string, int)>>();
+            IList<DeviceStruct> ValidMatches = new List<DeviceStruct>();
 
             List<(string, int)> pairs = new List<(string, int)>();
 
@@ -61,16 +77,19 @@ namespace SignalDecoder.Application.Service
                 Sum += Item;
             }
 
-            RunDecode(INDEX_DEFAULT, Sum, request.Tolerance, pairs, new List<(string, int)>(), ValidMatches);
+            Stopwatch sw = Stopwatch.StartNew();
+
+            RecursiveDecode(INDEX_DEFAULT, Sum + request.Tolerance, request.Tolerance, pairs, new List<(string, int)>(), ValidMatches);
+
+            sw.Stop();
 
             List<DecodeResult> SolutionsRet = [];
 
-            List<string> lst = [];
-            Dictionary<string, int[]> dict = [];
-
-            foreach (var Outer in ValidMatches)
+            foreach (DeviceStruct devicedata in ValidMatches)
             {
-                 foreach (var (DeviceId, Value) in Outer)
+                List<string> lst = [];
+                Dictionary<string, int[]> dict = [];
+                foreach (var (DeviceId, Value) in devicedata.DeviceList)
                 {
                     dict.Add(DeviceId, request.Devices[DeviceId]);
                     lst.Add(DeviceId);
@@ -82,14 +101,14 @@ namespace SignalDecoder.Application.Service
                     SummedDeviceArr = SummedDeviceArr.Zip(device.Value, (a, b) => a + b).ToArray();
                 }
 
-                SolutionsRet.Add(new DecodeResult { TransmittingDevices = lst, DecodedSignals = dict, ComputedSum = SummedDeviceArr, MatchesReceived = false });
+                SolutionsRet.Add(new DecodeResult { TransmittingDevices = lst, DecodedSignals = dict, ComputedSum = SummedDeviceArr, MatchesReceived = devicedata.IsMatch });
             }
 
             return new DecodeResponse
             {
                 Solutions = SolutionsRet,
-                SolutionCount = 1,
-                SolveTimeMs = 1
+                SolutionCount = SolutionsRet.Count,
+                SolveTimeMs = sw.ElapsedMilliseconds
             };
         }
     }
